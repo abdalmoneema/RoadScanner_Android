@@ -1,7 +1,9 @@
 package com.gmail.dev.abdalmoneem.roadscanner.roadscanner;
 
 import android.Manifest;
+import android.app.AlarmManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -16,6 +18,8 @@ import android.widget.Button;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.ActivityRecognition;
+
+import java.util.Calendar;
 
 public class MainActivity extends AppCompatActivity implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
@@ -41,6 +45,16 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
         requestPermissions();
 
+//        Intent myIntent = new Intent(getApplicationContext(), UserActivityService.class);
+//        PendingIntent pendingIntent = PendingIntent.getBroadcast(getApplicationContext(),  0, myIntent, 0);
+//
+//        AlarmManager alarmManager = (AlarmManager)getApplicationContext().getSystemService(Context.ALARM_SERVICE);
+//        Calendar calendar = Calendar.getInstance();
+//        calendar.setTimeInMillis(System.currentTimeMillis());
+//        calendar.add(Calendar.SECOND, 2); // first time
+//        long frequency= 2 * 1000; // in ms
+//        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), frequency, pendingIntent);
+
     }
 
     private void requestPermissions() {
@@ -58,59 +72,18 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
         if (requestCode == 100)
         {
-            if (grantResults[0] == PackageManager.PERMISSION_GRANTED && grantResults[1] == PackageManager.PERMISSION_GRANTED)
-            {
-                enableButtons();
-                StartUserActivityService();
-            }
-            else
+            if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED)
             {
                 requestPermissions();
             }
         }
     }
 
-    private void enableButtons() {
-        btnSetBump.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-
-            }
-        });
-
-        btnStartMovementService.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                StartUserActivityService();
-            }
-        });
-
-        btnStopMovementService.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                StopUserActivityService();
-            }
-        });
-    }
-
-
-
-    private void StartUserActivityService()
-    {
-        Intent intent = new Intent(getApplicationContext(),UserActivityService.class);
-        startService(intent);
-    }
-
-    private void StopUserActivityService() {
-        Intent intent = new Intent(getApplicationContext(),UserActivityService.class);
-        stopService(intent);
-    }
-
     @Override
     public void onConnected(@Nullable Bundle bundle) {
         Intent intent = new Intent( this, UserActivityService.class );
         PendingIntent pendingIntent = PendingIntent.getService( this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT );
-        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates( mApiClient, 3000, pendingIntent );
+        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates( mApiClient, 2000, pendingIntent );
     }
 
     @Override

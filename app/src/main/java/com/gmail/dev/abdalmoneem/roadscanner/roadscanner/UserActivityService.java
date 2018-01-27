@@ -15,6 +15,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
 import android.widget.Toast;
@@ -22,14 +23,16 @@ import android.widget.Toast;
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.Measurement;
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.ResultModel;
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.Trip;
+import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.WebApi.ApiUtils;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
+import com.google.android.gms.location.LocationServices;
 
 import java.util.Calendar;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
-import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -41,81 +44,47 @@ import retrofit2.Response;
 
 public class UserActivityService extends IntentService implements SensorEventListener {
     protected static final String TAG = "UserActivityServiceClass";
-    /**
-     * Creates an IntentService.  Invoked by your subclass's constructor.
-     */
-    DetectedActivity lastActivity;
-    //Intent movementServiceIntent;
 
-    float mLastAx;
-    float mLastAy;
-    float mLastAz;
+    static int lastActivity = DetectedActivity.UNKNOWN;
+    static float mLastAx,mLastAy,mLastAz;
+    static double mLastLongitude,mLastLatitude;
+    static Trip trip;
 
-    Trip trip;
-    private LocationListener listener;
-    private LocationManager locationManager;
-    private SensorManager sensorManager;
-    private Sensor accelerometer;
+    private static LocationManager locationManager;
+    private static SensorManager sensorManager;
+    private static Sensor accelerometer;
     Handler handler ;
 
     public UserActivityService() {
-
         super(TAG);
-        trip = new Trip();
+        if (trip == null)
+            trip = new Trip();
         handler = new Handler(Looper.getMainLooper()); //for toast show
 
-        listener = new LocationListener() {
-            @Override
-            public void onLocationChanged(Location location) {
 
-                Measurement measurement = new Measurement(location.getLongitude(), location.getLatitude(), mLastAx, mLastAy, mLastAz,  Calendar.getInstance().getTime());
-                trip.getMeasurements().add(measurement);
-            }
-
-            @Override
-            public void onStatusChanged(String provider, int status, Bundle extras) {
-
-            }
-
-            @Override
-            public void onProviderEnabled(String provider) {
-
-            }
-
-            @Override
-            public void onProviderDisabled(String provider) {
-                Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            }
-        };
     }
+
+
 
     @Override
     public void onCreate() {
+
         super.onCreate();
-//        movementServiceIntent = new Intent(getBaseContext(), MovementService.class);
+        if (locationManager == null)
+            locationManager = (LocationManager)this.getSystemService(Context.LOCATION_SERVICE);
     }
 
     @Override
     protected void onHandleIntent(@Nullable Intent intent) {
         if (ActivityRecognitionResult.hasResult(intent)) {
             ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
-            handleDetectedActivities(result.getProbableActivities());
+            handleDetectedActivities(result.getMostProbableActivity());
         }
     }
 
-    private void handleDetectedActivities(List<DetectedActivity> probableActivities) {
+    private void handleDetectedActivities(DetectedActivity detetedActivity) {
 
-        DetectedActivity maxActivity = Collections.max(probableActivities, new Comparator<DetectedActivity>() {
-
-            public int compare(DetectedActivity o1, DetectedActivity o2) {
-                return o1.getConfidence() - o2.getConfidence();
-            }
-        });
-
-
-        if (maxActivity.getType() == DetectedActivity.IN_VEHICLE) //&& maxActivity.getConfidence() >= 75
+        if (detetedActivity.getType() == DetectedActivity.IN_VEHICLE) //&& maxActivity.getConfidence() >= 75
         {
             handler.post(new Runnable() {
 
@@ -126,18 +95,25 @@ public class UserActivityService extends IntentService implements SensorEventLis
                             Toast.LENGTH_SHORT).show();
                 }
             });
-            Log.e("ActivityRecogition", "In Vehicle: " + maxActivity.getConfidence());
+            Log.e("ActivityRecogition", "In Vehicle: " + detetedActivity.getConfidence());
 
-            if (lastActivity == null || lastActivity.getType() != DetectedActivity.IN_VEHICLE) {
+            if (lastActivity != DetectedActivity.IN_VEHICLE) {
                 StartMovementTracking();
-                lastActivity = maxActivity;
+                lastActivity = detetedActivity.getType();
             }
-        } else if ((maxActivity.getType() == DetectedActivity.ON_FOOT))  //&& maxActivity.getConfidence() >= 75
-        {
-            StopMovementService();
 
-            lastActivity = maxActivity;
-            Log.e("ActivityRecogition", "ON FOOT: " + maxActivity.getConfidence());
+            if (mLastLongitude != 0 && mLastLatitude!=0) {
+                Measurement measurement = new Measurement(mLastLongitude, mLastLatitude, mLastAx, mLastAy, mLastAz, Calendar.getInstance().getTime());
+                trip.getMeasurements().add(measurement);
+            }
+
+            if (trip.getMeasurements().size()>=99)
+                SaveTrip();
+
+        } else if ((detetedActivity.getType() == DetectedActivity.ON_FOOT))  //&& maxActivity.getConfidence() >= 75
+        {
+
+            Log.e("ActivityRecogition", "ON FOOT: " + detetedActivity.getConfidence());
 
             handler.post(new Runnable() {
 
@@ -149,11 +125,14 @@ public class UserActivityService extends IntentService implements SensorEventLis
                 }
             });
 
+             StopMovementService();
+
+            lastActivity = detetedActivity.getType();
 
         } else {
 
 
-            Log.e("ActivityRecogition", "Not In vehicle nor  on foot: " + maxActivity.getType() + "," + maxActivity.getConfidence());
+            Log.e("ActivityRecogition", "Not In vehicle nor  on foot: " + detetedActivity.getType() + "," + detetedActivity.getConfidence());
 
             handler.post(new Runnable() {
 
@@ -183,28 +162,33 @@ public class UserActivityService extends IntentService implements SensorEventLis
             }
         });
 
-        trip.getMeasurements().clear();
-
         if (sensorManager == null) {
             sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            sensorManager.registerListener(this, accelerometer, 2000000);
         }
-        sensorManager.registerListener(this, accelerometer, 2000000);
 
-        if (locationManager == null)
-            locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 0, listener);
+
+
+
+//        locationManager.getLastKnownLocation(locationManager.NETWORK_PROVIDER);
+//        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 0, this);
+//        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2000, 0, this);
+
 
     }
 
     private void StopMovementService() {
-        if (locationManager != null)
-        {
-            locationManager.removeUpdates(listener);
-        }
+//        if (locationManager != null)
+//        {
+//            locationManager.removeUpdates(this);
+//            locationManager = null;
+//
+//        }
         if (sensorManager != null)
         {
             sensorManager.unregisterListener(this);
+            sensorManager = null;
         }
 
         handler.post(new Runnable() {
@@ -220,6 +204,7 @@ public class UserActivityService extends IntentService implements SensorEventLis
         SaveTrip();
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
@@ -227,19 +212,17 @@ public class UserActivityService extends IntentService implements SensorEventLis
             mLastAy = event.values[1];
             mLastAz = event.values[2];
 
+            @SuppressLint("MissingPermission")  Location lastlocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (lastlocation == null)
+            {
+                lastlocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
 
+            if (lastlocation != null) {
 
-
-//            Handler handler = new Handler(Looper.getMainLooper());
-//            handler.post(new Runnable() {
-//
-//                @Override
-//                public void run() {
-//                    Toast.makeText(getApplicationContext(),
-//                            "Ax:" + Ax + ",Ay:" + Ay + ", Az:" + Az + ", Speed:" + speed,
-//                            Toast.LENGTH_SHORT).show();
-//                }
-//            });
+                mLastLatitude = lastlocation.getLatitude();
+                mLastLongitude = lastlocation.getLongitude();
+            }
 
         }
     }
@@ -251,27 +234,107 @@ public class UserActivityService extends IntentService implements SensorEventLis
 
     private void SaveTrip() {
         if (trip.getMeasurements().size() > 0) {
-             ApiUtils.getAPIService().SaveTrip(trip);
+            Call<ResultModel> call = ApiUtils.getAPIService().SaveTrip(trip);
+            call.enqueue(new Callback<ResultModel>() {
+                @Override
+                public void onResponse(Call<ResultModel> call, Response<ResultModel> response) {
+                    final int statusCode = response.code();
+                    ResultModel resMod = response.body();
+
+                    trip.getMeasurements().clear();
+
+                    handler.post(new Runnable() {
+
+                        @Override
+                        public void run() {
+                            Toast.makeText(getApplicationContext(),
+                                    "Save Trip Response code: "+ statusCode,
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+
+                @Override
+                public void onFailure(Call<ResultModel> call, Throwable t) {
+                    // Log error here since request failed
+                    handler.post(new Runnable() {
+
+                        @Override
+                        public void run() {
+                            Toast.makeText(getApplicationContext(),
+                                    "Failed to Save Trip : ",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    });
+
+                    if (trip.getMeasurements().size()>200)
+                        trip.getMeasurements().clear();
+
+                    Log.e("saveError",t.getMessage()+"\n"+ t.getStackTrace());
+                }
+            });
+
         }
     }
 
-    private void SaveTestTrip() {
-        Trip testTrip = new Trip();
-        testTrip.setSerial("test");
-        testTrip.getMeasurements().add(new Measurement(0,0,0,0,0, new Date()));
+//    private void SaveTestTrip() {
+//        Trip testTrip = new Trip();
+//        testTrip.setSerial("test");
+//        testTrip.getMeasurements().add(new Measurement(0,0,0,0,0, new Date()));
+//
+//        Call<ResultModel> call = ApiUtils.getAPIService().SaveTrip(testTrip);
+//        call.enqueue(new Callback<ResultModel>() {
+//            @Override
+//            public void onResponse(Call<ResultModel> call, Response<ResultModel> response) {
+//                final int statusCode = response.code();
+//                ResultModel resMod = response.body();
+//
+//                handler.post(new Runnable() {
+//
+//                    @Override
+//                    public void run() {
+//                        Toast.makeText(getApplicationContext(),
+//                                "Save Trip Response code: "+ statusCode,
+//                                Toast.LENGTH_SHORT).show();
+//                    }
+//                });
+//            }
+//
+//            @Override
+//            public void onFailure(Call<ResultModel> call, Throwable t) {
+//                // Log error here since request failed
+//                handler.post(new Runnable() {
+//
+//                    @Override
+//                    public void run() {
+//                        Toast.makeText(getApplicationContext(),
+//                                "Failed to Save Trip : ",
+//                                Toast.LENGTH_SHORT).show();
+//                    }
+//                });
+//            }
+//        });
+//    }
 
-        Call<ResultModel> call = ApiUtils.getAPIService().SaveTrip(testTrip);
-        call.enqueue(new Callback<ResultModel>() {
-            @Override
-            public void onResponse(Call<ResultModel> call, Response<ResultModel> response) {
-                int statusCode = response.code();
-                ResultModel resMod = response.body();
-            }
-
-            @Override
-            public void onFailure(Call<ResultModel> call, Throwable t) {
-                // Log error here since request failed
-            }
-        });
-    }
+//    @Override
+//    public void onLocationChanged(Location location) {
+//        Log.v("location", "IN ON LOCATION CHANGE, lat=" + location.getLatitude() + ", lon=" + location.getLongitude());
+//    }
+//
+//    @Override
+//    public void onStatusChanged(String provider, int status, Bundle extras) {
+//
+//    }
+//
+//    @Override
+//    public void onProviderEnabled(String provider) {
+//
+//    }
+//
+//    @Override
+//    public void onProviderDisabled(String provider) {
+//        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+//        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+//        startActivity(intent);
+//    }
 }

@@ -1,4 +1,4 @@
-package com.gmail.dev.abdalmoneem.roadscanner.roadscanner;
+package com.gmail.dev.abdalmoneem.roadscanner.roadscanner.WebApi;
 
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;

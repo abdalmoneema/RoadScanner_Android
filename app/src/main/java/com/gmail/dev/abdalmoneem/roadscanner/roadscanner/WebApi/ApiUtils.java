@@ -1,4 +1,4 @@
-package com.gmail.dev.abdalmoneem.roadscanner.roadscanner;
+package com.gmail.dev.abdalmoneem.roadscanner.roadscanner.WebApi;
 
 /**
  * Created by Abd on 1/6/2018.

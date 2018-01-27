@@ -1,4 +1,4 @@
-package com.gmail.dev.abdalmoneem.roadscanner.roadscanner;
+package com.gmail.dev.abdalmoneem.roadscanner.roadscanner.WebApi;
 
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.ResultModel;
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.Trip;
