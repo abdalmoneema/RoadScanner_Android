@@ -1,9 +1,11 @@
 package com.gmail.dev.abdalmoneem.roadscanner.roadscanner;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.IntentService;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -17,6 +19,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -29,7 +32,13 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.SettingsClient;
 
 import java.util.Calendar;
 import java.util.Date;
@@ -38,22 +47,31 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+import static com.google.android.gms.location.LocationServices.getFusedLocationProviderClient;
+
 /**
  * Created by Abd on 12/14/2017.
  */
 
 public class UserActivityService extends IntentService implements SensorEventListener {
     protected static final String TAG = "UserActivityServiceClass";
+    private static long UPDATE_INTERVAL = 2 * 1000;  /* 10 secs */
+    private static long FASTEST_INTERVAL = 1000; /* 2 sec */
 
     static int lastActivity = DetectedActivity.UNKNOWN;
-    static float mLastAx,mLastAy,mLastAz;
-    static double mLastLongitude,mLastLatitude;
+    static float mLastAx, mLastAy, mLastAz;
+    static double mLastLongitude, mLastLatitude;
     static Trip trip;
 
-    private static LocationManager locationManager;
+    //    private static LocationManager locationManager;
+    private static FusedLocationProviderClient mFusedLocationClient;
+    private static LocationCallback mLocationCallback;
+    private static LocationRequest mLocationRequest;
+
+
     private static SensorManager sensorManager;
     private static Sensor accelerometer;
-    Handler handler ;
+    Handler handler;
 
     public UserActivityService() {
         super(TAG);
@@ -65,13 +83,69 @@ public class UserActivityService extends IntentService implements SensorEventLis
     }
 
 
-
+    @SuppressLint("MissingPermission")
     @Override
     public void onCreate() {
 
         super.onCreate();
-        if (locationManager == null)
-            locationManager = (LocationManager)this.getSystemService(Context.LOCATION_SERVICE);
+//        if (locationManager == null)
+//            locationManager = (LocationManager)this.getSystemService(Context.LOCATION_SERVICE);
+
+        if (mLocationCallback == null)
+            mLocationCallback = new LocationCallback() {
+                @Override
+                public void onLocationResult(LocationResult locationResult) {
+                    // do work here
+                    Location location = locationResult.getLastLocation();
+                    if (location != null){
+                        mLastLatitude = location.getLatitude();
+                        mLastLongitude = location.getLongitude();
+
+                        if (mLastLongitude != 0 && mLastLatitude!=0 && lastActivity == DetectedActivity.IN_VEHICLE) {
+                            Measurement measurement = new Measurement(mLastLongitude, mLastLatitude, mLastAx, mLastAy, mLastAz, Calendar.getInstance().getTime());
+                            trip.getMeasurements().add(measurement);
+                        }
+
+//                        if (trip.getMeasurements().size()>=99)
+//                            SaveTrip();
+                    }
+                    else
+                    {
+                        handler.post(new Runnable() {
+
+                            @Override
+                            public void run() {
+                                Toast.makeText(getApplicationContext(),
+                                        "Location is null",
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                }
+            };
+
+        if (mFusedLocationClient == null) {
+            if (mLocationRequest == null) {
+                mLocationRequest = new LocationRequest();
+                mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+                mLocationRequest.setInterval(UPDATE_INTERVAL);
+                mLocationRequest.setFastestInterval(FASTEST_INTERVAL);
+            }
+
+            // Create LocationSettingsRequest object using location request
+            LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder();
+            builder.addLocationRequest(mLocationRequest);
+            LocationSettingsRequest locationSettingsRequest = builder.build();
+
+            // Check whether location settings are satisfied
+            SettingsClient settingsClient = LocationServices.getSettingsClient(this);
+            settingsClient.checkLocationSettings(locationSettingsRequest);
+
+            mFusedLocationClient = getFusedLocationProviderClient(this);
+            mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
+        }
+
+
     }
 
     @Override
@@ -97,19 +171,10 @@ public class UserActivityService extends IntentService implements SensorEventLis
             });
             Log.e("ActivityRecogition", "In Vehicle: " + detetedActivity.getConfidence());
 
-            if (lastActivity != DetectedActivity.IN_VEHICLE) {
+            if (lastActivity != DetectedActivity.IN_VEHICLE && trip.getMeasurements().size()== 0) {
                 StartMovementTracking();
                 lastActivity = detetedActivity.getType();
             }
-
-            if (mLastLongitude != 0 && mLastLatitude!=0) {
-                Measurement measurement = new Measurement(mLastLongitude, mLastLatitude, mLastAx, mLastAy, mLastAz, Calendar.getInstance().getTime());
-                trip.getMeasurements().add(measurement);
-            }
-
-            if (trip.getMeasurements().size()>=99)
-                SaveTrip();
-
         } else if ((detetedActivity.getType() == DetectedActivity.ON_FOOT))  //&& maxActivity.getConfidence() >= 75
         {
 
@@ -125,7 +190,8 @@ public class UserActivityService extends IntentService implements SensorEventLis
                 }
             });
 
-             StopMovementService();
+
+            StopMovementService();
 
             lastActivity = detetedActivity.getType();
 
@@ -144,7 +210,10 @@ public class UserActivityService extends IntentService implements SensorEventLis
                 }
             });
 
-
+            if (lastActivity != DetectedActivity.IN_VEHICLE && trip.getMeasurements().size()>0  )
+            {
+                StopMovementService();
+            }
 
         }
     }
@@ -164,7 +233,7 @@ public class UserActivityService extends IntentService implements SensorEventLis
 
         if (sensorManager == null) {
             sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
             sensorManager.registerListener(this, accelerometer, 2000000);
         }
 
@@ -179,12 +248,12 @@ public class UserActivityService extends IntentService implements SensorEventLis
     }
 
     private void StopMovementService() {
-//        if (locationManager != null)
-//        {
-//            locationManager.removeUpdates(this);
-//            locationManager = null;
-//
-//        }
+        if (mFusedLocationClient != null)
+        {
+            mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+            mFusedLocationClient = null;
+
+        }
         if (sensorManager != null)
         {
             sensorManager.unregisterListener(this);
@@ -207,22 +276,22 @@ public class UserActivityService extends IntentService implements SensorEventLis
     @SuppressLint("MissingPermission")
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+        if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
             mLastAx = event.values[0];
             mLastAy = event.values[1];
             mLastAz = event.values[2];
 
-            @SuppressLint("MissingPermission")  Location lastlocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (lastlocation == null)
-            {
-                lastlocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-            }
+//            @SuppressLint("MissingPermission")  Location lastlocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+//            if (lastlocation == null)
+//            {
+//                lastlocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+//            }
 
-            if (lastlocation != null) {
-
-                mLastLatitude = lastlocation.getLatitude();
-                mLastLongitude = lastlocation.getLongitude();
-            }
+//            if (lastlocation != null) {
+//
+//                mLastLatitude = lastlocation.getLatitude();
+//                mLastLongitude = lastlocation.getLongitude();
+//            }
 
         }
     }
@@ -241,7 +310,8 @@ public class UserActivityService extends IntentService implements SensorEventLis
                     final int statusCode = response.code();
                     ResultModel resMod = response.body();
 
-                    trip.getMeasurements().clear();
+                    if (statusCode == 200)
+                        trip.getMeasurements().clear();
 
                     handler.post(new Runnable() {
 
@@ -267,8 +337,8 @@ public class UserActivityService extends IntentService implements SensorEventLis
                         }
                     });
 
-                    if (trip.getMeasurements().size()>200)
-                        trip.getMeasurements().clear();
+//                    if (trip.getMeasurements().size()>200)
+//                        trip.getMeasurements().clear();
 
                     Log.e("saveError",t.getMessage()+"\n"+ t.getStackTrace());
                 }
