@@ -23,6 +23,7 @@ import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.Acceleration;
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.Measurement;
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.ResultModel;
 import com.gmail.dev.abdalmoneem.roadscanner.roadscanner.Models.Trip;
@@ -40,6 +41,7 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.SettingsClient;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -55,13 +57,16 @@ import static com.google.android.gms.location.LocationServices.getFusedLocationP
 
 public class UserActivityService extends IntentService implements SensorEventListener {
     protected static final String TAG = "UserActivityServiceClass";
-    private static long UPDATE_INTERVAL = 2 * 1000;  /* 10 secs */
-    private static long FASTEST_INTERVAL = 1000; /* 2 sec */
+    private static long UPDATE_INTERVAL =  1000;
+    private static long FASTEST_INTERVAL = 1000;
 
     static int lastActivity = DetectedActivity.UNKNOWN;
     static float mLastAx, mLastAy, mLastAz;
+//    static ArrayList<Acceleration> acceleartionValues = new ArrayList<Acceleration>() ;
     static double mLastLongitude, mLastLatitude;
     static Trip trip;
+
+    static boolean IsSaving =false;
 
     //    private static LocationManager locationManager;
     private static FusedLocationProviderClient mFusedLocationClient;
@@ -103,7 +108,9 @@ public class UserActivityService extends IntentService implements SensorEventLis
 
                         if (mLastLongitude != 0 && mLastLatitude!=0 && lastActivity == DetectedActivity.IN_VEHICLE) {
                             Measurement measurement = new Measurement(mLastLongitude, mLastLatitude, mLastAx, mLastAy, mLastAz, Calendar.getInstance().getTime());
+//                            measurement.setAccelerations((ArrayList<Acceleration>)acceleartionValues.clone());
                             trip.getMeasurements().add(measurement);
+//                            acceleartionValues.clear();
                         }
 
 //                        if (trip.getMeasurements().size()>=99)
@@ -185,7 +192,7 @@ public class UserActivityService extends IntentService implements SensorEventLis
                 @Override
                 public void run() {
                     Toast.makeText(getApplicationContext(),
-                            "Activity: on foot",
+                            "on foot",
                             Toast.LENGTH_SHORT).show();
                 }
             });
@@ -205,7 +212,7 @@ public class UserActivityService extends IntentService implements SensorEventLis
                 @Override
                 public void run() {
                     Toast.makeText(getApplicationContext(),
-                            "Not In vehicle nor  on foot: ",
+                            "3",
                             Toast.LENGTH_SHORT).show();
                 }
             });
@@ -260,15 +267,15 @@ public class UserActivityService extends IntentService implements SensorEventLis
             sensorManager = null;
         }
 
-        handler.post(new Runnable() {
-
-            @Override
-            public void run() {
-                Toast.makeText(getApplicationContext(),
-                        "Trip end, measurements count: "+ trip.getMeasurements().size(),
-                        Toast.LENGTH_SHORT).show();
-            }
-        });
+//        handler.post(new Runnable() {
+//
+//            @Override
+//            public void run() {
+//                Toast.makeText(getApplicationContext(),
+//                        "Trip end, measurements count: "+ trip.getMeasurements().size(),
+//                        Toast.LENGTH_SHORT).show();
+//            }
+//        });
 
         SaveTrip();
     }
@@ -280,6 +287,8 @@ public class UserActivityService extends IntentService implements SensorEventLis
             mLastAx = event.values[0];
             mLastAy = event.values[1];
             mLastAz = event.values[2];
+
+           // acceleartionValues.add(new Acceleration(event.values[0],event.values[1],event.values[2]) );
 
 //            @SuppressLint("MissingPermission")  Location lastlocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 //            if (lastlocation == null)
@@ -302,7 +311,9 @@ public class UserActivityService extends IntentService implements SensorEventLis
     }
 
     private void SaveTrip() {
-        if (trip.getMeasurements().size() > 0) {
+        if (trip.getMeasurements().size() > 0 && !IsSaving) {
+            IsSaving =true;
+
             Call<ResultModel> call = ApiUtils.getAPIService().SaveTrip(trip);
             call.enqueue(new Callback<ResultModel>() {
                 @Override
@@ -322,6 +333,8 @@ public class UserActivityService extends IntentService implements SensorEventLis
                                     Toast.LENGTH_SHORT).show();
                         }
                     });
+
+                    IsSaving =false;
                 }
 
                 @Override
@@ -341,6 +354,8 @@ public class UserActivityService extends IntentService implements SensorEventLis
 //                        trip.getMeasurements().clear();
 
                     Log.e("saveError",t.getMessage()+"\n"+ t.getStackTrace());
+
+                    IsSaving =false;
                 }
             });
 

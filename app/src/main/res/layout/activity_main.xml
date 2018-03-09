@@ -12,14 +12,32 @@
         tools:layout_editor_absoluteY="8dp"
         tools:layout_editor_absoluteX="8dp"
         android:orientation="vertical">
-    <Button
+
+        <Button
         android:id="@+id/btnSetBump"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Set Bump"
         tools:layout_editor_absoluteY="0dp"
         tools:layout_editor_absoluteX="0dp" />
-    <Button
+
+        <Button
+            android:id="@+id/btnSetPothole"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Set Pothole"
+            tools:layout_editor_absoluteY="0dp"
+            tools:layout_editor_absoluteX="0dp" />
+
+        <Button
+            android:id="@+id/btnShowMap"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Show Map"
+            tools:layout_editor_absoluteY="0dp"
+            tools:layout_editor_absoluteX="0dp" />
+
+        <Button
         android:id="@+id/btnStartMovementService"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
