@@ -7,7 +7,7 @@ package com.gmail.dev.abdalmoneem.roadscanner.roadscanner.WebApi;
 public class ApiUtils {
     private ApiUtils() {}
 
-    public static final String BASE_URL = "http://abdalmoneem2.freeasphost.net/";
+    public static final String BASE_URL = "http://www.roadscanner.somee.com/";
 
     public static RoadScannerAPIService getAPIService() {
 

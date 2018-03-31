@@ -80,26 +80,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 }
             };
 
-        if (mFusedLocationClient == null) {
-            if (mLocationRequest == null) {
-                mLocationRequest = new LocationRequest();
-                mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-                mLocationRequest.setInterval(UPDATE_INTERVAL);
-                mLocationRequest.setFastestInterval(FASTEST_INTERVAL);
-            }
 
-            // Create LocationSettingsRequest object using location request
-            LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder();
-            builder.addLocationRequest(mLocationRequest);
-            LocationSettingsRequest locationSettingsRequest = builder.build();
-
-            // Check whether location settings are satisfied
-            SettingsClient settingsClient = LocationServices.getSettingsClient(this);
-            settingsClient.checkLocationSettings(locationSettingsRequest);
-
-            mFusedLocationClient = getFusedLocationProviderClient(this);
-            mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
-        }
 
         btnSetBump = (Button) findViewById(R.id.btnSetBump);
         btnSetPothole = (Button) findViewById(R.id.btnSetPothole);
@@ -154,6 +135,51 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 });
             }
         });
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if(mFusedLocationClient !=null) {
+            mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+            mFusedLocationClient = null;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if(mFusedLocationClient !=null) {
+            mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+            mFusedLocationClient = null;
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mFusedLocationClient == null) {
+            if (mLocationRequest == null) {
+                mLocationRequest = new LocationRequest();
+                mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+                mLocationRequest.setInterval(UPDATE_INTERVAL);
+                mLocationRequest.setFastestInterval(FASTEST_INTERVAL);
+            }
+
+            // Create LocationSettingsRequest object using location request
+            LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder();
+            builder.addLocationRequest(mLocationRequest);
+            LocationSettingsRequest locationSettingsRequest = builder.build();
+
+            // Check whether location settings are satisfied
+            SettingsClient settingsClient = LocationServices.getSettingsClient(this);
+            settingsClient.checkLocationSettings(locationSettingsRequest);
+
+            mFusedLocationClient = getFusedLocationProviderClient(this);
+
+        }
+        mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
     }
 
     /**

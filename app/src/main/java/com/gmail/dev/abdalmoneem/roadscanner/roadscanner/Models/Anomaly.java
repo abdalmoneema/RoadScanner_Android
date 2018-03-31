@@ -16,9 +16,9 @@ public class Anomaly {
     @SerializedName("Type")
     public int Type;
 
-    public Anomaly(double longitude, double latitude, int type) {
-        Longitude = longitude;
+    public Anomaly(double latitude,double longitude, int type) {
         Latitude = latitude;
+        Longitude = longitude;
         Type = type;
     }
 }

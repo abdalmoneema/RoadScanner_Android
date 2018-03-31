@@ -46,7 +46,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
     public GoogleApiClient mApiClient;
 
-    Button btnSetBump, btnSetPothole, btnStartMovementService, btnStopMovementService,btnShowMap;
+    Button  btnStartMovementService, btnStopMovementService,btnShowMap;
     Handler handler;
 
     private FusedLocationProviderClient mFusedLocationClient;
@@ -87,8 +87,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
                 }
             };
 
-        btnSetBump = (Button) findViewById(R.id.btnSetBump);
-        btnSetPothole = (Button) findViewById(R.id.btnSetPothole);
+
         btnStartMovementService = (Button) findViewById(R.id.btnStartMovementService);
         btnStopMovementService = (Button) findViewById(R.id.btnStopMovementService);
         btnShowMap = (Button) findViewById(R.id.btnShowMap);
@@ -101,80 +100,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
             }
         });
 
-        btnSetBump.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-
-                mFusedLocationClient = getFusedLocationProviderClient(getApplicationContext());
-                if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                    // TODO: Consider calling
-                    //    ActivityCompat#requestPermissions
-                    // here to request the missing permissions, and then overriding
-                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                    //                                          int[] grantResults)
-                    // to handle the case where the user grants the permission. See the documentation
-                    // for ActivityCompat#requestPermissions for more details.
-                    return;
-                }
-                mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
-
-                if (mLastLongitude != 0 && mLastLatitude!=0) {
-                    Anomaly anomaly = new Anomaly(mLastLongitude, mLastLatitude,1);
-
-                    Call<ResultModel> call = ApiUtils.getAPIService().SaveAnomaly(anomaly);
-                    call.enqueue(new Callback<ResultModel>() {
-                        @Override
-                        public void onResponse(Call<ResultModel> call, Response<ResultModel> response) {
-                            final int statusCode = response.code();
-                            ResultModel resMod = response.body();
-
-                            handler.post(new Runnable() {
-
-                                @Override
-                                public void run() {
-                                    Toast.makeText(getApplicationContext(),
-                                            "Save Anomaly Response code: "+ statusCode,
-                                            Toast.LENGTH_SHORT).show();
-                                }
-                            });
-
-                        }
-
-                        @Override
-                        public void onFailure(Call<ResultModel> call, Throwable t) {
-                            // Log error here since request failed
-                            handler.post(new Runnable() {
-
-                                @Override
-                                public void run() {
-                                    Toast.makeText(getApplicationContext(),
-                                            "Failed to Save Anomaly : ",
-                                            Toast.LENGTH_SHORT).show();
-                                }
-                            });
-
-                            Log.e("saveError",t.getMessage()+"\n"+ t.getStackTrace());
-
-                        }
-                    });
-
-                }
-
-
-            }
-        });
         requestPermissions();
-
-//        Intent myIntent = new Intent(getApplicationContext(), UserActivityService.class);
-//        PendingIntent pendingIntent = PendingIntent.getBroadcast(getApplicationContext(),  0, myIntent, 0);
-//
-//        AlarmManager alarmManager = (AlarmManager)getApplicationContext().getSystemService(Context.ALARM_SERVICE);
-//        Calendar calendar = Calendar.getInstance();
-//        calendar.setTimeInMillis(System.currentTimeMillis());
-//        calendar.add(Calendar.SECOND, 2); // first time
-//        long frequency= 2 * 1000; // in ms
-//        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), frequency, pendingIntent);
-
     }
 
     private void requestPermissions() {
